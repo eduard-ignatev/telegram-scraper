@@ -19,33 +19,39 @@ API_HASH = os.getenv('API_HASH')
 DB_NAME = os.getenv('DB_NAME')
 
 
-def create_db() -> None:
-    """Create SQLite database and table if they don't exist."""
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS messages (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            message_id INTEGER,
-            message_date TEXT,
-            message_text TEXT,
-            channel_name TEXT,
-            scape_ts TEXT
-        )
-    ''')
-    conn.commit()
-    conn.close()
+class Database:
+    def __init__(self, db_name: str) -> None:
+        self.db_name = db_name
+        self.connection = None
 
-def insert_message(data: tuple) -> None:
-    """Insert scraped message into the database."""
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    cursor.execute('''
-        INSERT INTO messages (message_id, message_date, message_text, channel_name, scape_ts)
-        VALUES (?, ?, ?, ?, ?)
-    ''', data)
-    conn.commit()
-    conn.close()
+    def connect(self) -> None:
+        self.connection = sqlite3.connect(self.db_name)
+
+    def create_table(self) -> None:
+        cursor = self.connection.cursor()
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                message_id INTEGER,
+                message_date TEXT,
+                message_text TEXT,
+                channel_name TEXT,
+                scape_ts TEXT
+            )
+        ''')
+        self.connection.commit()
+
+    def insert_message(self, data: tuple) -> None:
+        cursor = self.connection.cursor()
+        cursor.execute('''
+            INSERT INTO messages (message_id, message_date, message_text, channel_name, scape_ts)
+            VALUES (?, ?, ?, ?, ?)
+        ''', data)
+        self.connection.commit()
+
+    def close(self) -> None:
+        self.connection.close()
+
 
 async def scrape_channel(client: TelegramClient, channel_name: str, limit: Optional[int] = None, offset_date: Optional[str] = None) -> None:
     """Scrape messages from a Telegram channel."""
@@ -63,7 +69,7 @@ async def scrape_channel(client: TelegramClient, channel_name: str, limit: Optio
                         channel_name,
                         datetime.now().isoformat()
                     )
-                    insert_message(message_data)
+                    db.insert_message(message_data)
                     messages_cnt += 1
                     sys.stdout.write(f"\rScraping channel: {channel_name} - Messages count: {messages_cnt}")
                     sys.stdout.flush()
@@ -89,9 +95,14 @@ if __name__ == '__main__':
         offset_date = datetime.strptime(args.offset_date, '%Y-%m-%d')
 
     # Create database and table
-    create_db()
+    db = Database(db_name=DB_NAME)
+    db.connect()
+    db.create_table()
 
     # Start Telegram client and scrape messages
     client = TelegramClient('session', API_ID, API_HASH)
     with client:
         client.loop.run_until_complete(scrape_channel(client, args.channel_name, args.limit, offset_date))
+
+    # Close database
+    db.close()
