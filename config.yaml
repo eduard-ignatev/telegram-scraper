@@ -8,7 +8,7 @@ db_name: "messages.db"
 # Parameters
 limit: null
 offset_date: 2025-01-01
-reverse: true # true - from offset_date to newest, false - from newest to offset_date
+reverse: true # true - from offset_date to newest, false - from offset_date to latest
 
 # Channels to scrape
 channels:
